@@ -1,0 +1,71 @@
+services:
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:11.0.0
+    container_name: forgejo
+    restart: always
+    ports:
+      - "${FORGEJO_HTTP_PORT}:3000"
+      - "${FORGEJO_SSH_PORT}:22"
+    volumes:
+      - ./data/forgejo:/data
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+    networks:
+      - git-net
+
+  woodpecker-server:
+    image: woodpeckerci/woodpecker-server:latest
+    container_name: woodpecker-server
+    restart: always
+    ports:
+      - "${WOODPECKER_HTTP_PORT}:8000"
+      - "${WOODPECKER_GRPC_PORT}:9000"
+    environment:
+      - WOODPECKER_OPEN=true
+      - WOODPECKER_ADMIN=walker
+      - WOODPECKER_HOST=http://${HOST_EXTERNAL_IP}:${NGINX_HTTP_PORT}
+      - WOODPECKER_FORGEJO=true
+      - WOODPECKER_FORGEJO_URL=http://${HOST_EXTERNAL_IP}:${NGINX_HTTP_PORT}/forgejo/
+      - WOODPECKER_FORGEJO_CLIENT=${WOODPECKER_FORGEJO_CLIENT}
+      - WOODPECKER_FORGEJO_SECRET=${WOODPECKER_FORGEJO_SECRET}
+      - WOODPECKER_AGENT_SECRET=${WOODPECKER_AGENT_SECRET}
+      - WOODPECKER_WEBHOOK_ALLOWED_HOST_LIST=${HOST_EXTERNAL_IP}
+      - WOODPECKER_ENABLE_PRIVILEGED_IMAGES=true
+    volumes:
+      - woodpecker-data:/var/lib/woodpecker
+    networks:
+      - git-net
+
+  woodpecker-agent:
+    image: woodpeckerci/woodpecker-agent:latest
+    container_name: woodpecker-agent
+    restart: always
+    privileged: true
+    depends_on:
+      - woodpecker-server
+    environment:
+      - WOODPECKER_SERVER=woodpecker-server:${WOODPECKER_GRPC_PORT}
+      - WOODPECKER_AGENT_SECRET=${WOODPECKER_AGENT_SECRET}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - git-net
+
+  proxy:
+    image: nginx:alpine
+    container_name: proxy
+    restart: always
+    ports:
+      - "${NGINX_HTTP_PORT}:80"
+    volumes:
+      - ./conf/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - git-net
+
+volumes:
+  woodpecker-data:
+
+networks:
+  git-net:
+    external: true

@@ -1,0 +1,6 @@
+.env*
+test*
+
+infra/git/data
+infra/registry/common
+infra/registry/data
