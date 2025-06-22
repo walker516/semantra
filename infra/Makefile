@@ -1,7 +1,10 @@
 .PHONY: init network env up down restart logs \
         registry-init registry-install registry-up registry-down registry-logs \
         git-up git-down git-logs \
-        forgejo-setup forgejo-template forgejo-init
+        forgejo-setup forgejo-template forgejo-init \
+        k3d-create k3d-delete k3d-registry k3d-info \
+        argocd-install argocd-portforward argocd-open \
+        deploy-app
 
 # Network config
 NETWORK_NAME=git-net
@@ -16,6 +19,7 @@ ENV_FILES=--env-file $(ENV_FILE) --env-file $(ENV_INTERNAL_FILE)
 # Directories
 REGISTRY_DIR=./registry
 GIT_DIR=./git
+K8S_MANIFESTS=./manifests/app/overlays/dev
 
 ### --- Shared Top-Level Commands ---
 
@@ -35,19 +39,20 @@ env:
 	@echo "HOST_EXTERNAL_IP=$$(ifconfig en0 | grep 'inet ' | awk '{print $$2}')" >> $(ENV_INTERNAL_FILE)
 
 up: network env
-	@echo "🚀 Starting Registry and Git"
+	@echo "🚀 Starting Registry, Git, and K3d"
 	make registry-up
 	make git-up
+	make k3d-create
 
 down:
-	@echo "⬇️ Stopping Registry and Git"
+	@echo "⬇️ Stopping all services"
 	make registry-down
 	make git-down
+	make k3d-delete
 
 restart: down env
 	@echo "🔄 Restarting all services"
-	make registry-up
-	make git-up
+	make up
 
 logs:
 	@echo "📜 Tailing all logs"
@@ -76,7 +81,7 @@ registry-down:
 registry-logs:
 	docker compose -f $(REGISTRY_DIR)/docker-compose.yml logs -f
 
-### --- GIT Commands ---
+### --- Git Commands ---
 
 git-up:
 	docker compose $(ENV_FILES) -f $(GIT_DIR)/docker-compose.yml up -d
@@ -109,3 +114,33 @@ forgejo-init:
 		-v $(CURDIR)/git/data/forgejo:/data \
 		alpine \
 		sh -c "apk add --no-cache gettext && envsubst < /data/gitea/conf/app.ini.template > /data/gitea/conf/app.ini"
+
+### --- K3d / Argo CD Commands ---
+
+k3d-create:
+	@echo "🚢 Creating k3d cluster"
+	k3d cluster create gitops-lab --config ./k3d-cluster.yaml
+
+k3d-delete:
+	@echo "🧨 Deleting k3d cluster"
+	k3d cluster delete gitops-lab
+
+k3d-info:
+	@echo "🔍 k3d Cluster Info"
+	kubectl cluster-info --context k3d-gitops-lab
+
+argocd-install:
+	@echo "📦 Installing Argo CD"
+	kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml || true
+
+argocd-portforward:
+	@echo "🌐 Port-forwarding Argo CD UI"
+	kubectl port-forward svc/argocd-server -n argocd 8080:443
+
+argocd-open:
+	@echo "🌍 Open Argo CD in browser"
+	xdg-open http://localhost:8080 || open http://localhost:8080 || true
+
+deploy-app:
+	@echo "🚀 Deploying application"
+	kubectl apply -k $(K8S_MANIFESTS)

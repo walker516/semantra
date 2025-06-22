@@ -1,0 +1,17 @@
+FROM node:23-alpine
+
+WORKDIR /app
+
+# Install dependencies
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# Copy static/config files
+COPY tsconfig.json ./
+COPY next.config.ts ./
+
+# App code will be bind-mounted during dev
+COPY public ./public
+
+EXPOSE 3001
+CMD ["npm", "run", "dev"]

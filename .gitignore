@@ -4,3 +4,11 @@ test*
 infra/git/data
 infra/registry/common
 infra/registry/data
+
+app/api/go.mod
+app/api/go.sum
+
+app/bff/node_modules
+app/web/node_modules
+
+app/db/pgdata

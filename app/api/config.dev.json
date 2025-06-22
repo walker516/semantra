@@ -1,0 +1,17 @@
+{
+  "database": {
+    "postgis": {
+      "db_name": "semantra",
+      "host": "db",
+      "port": "5432",
+      "user": "dev",
+      "password": "dev",
+      "sslmode": "disable",
+      "timezone": "Asia/Tokyo"
+    }
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": "8081"
+  }
+}

@@ -1,0 +1,22 @@
+_format_version: "3.0"
+services:
+  - name: bff-service
+    url: http://bff:4000
+    routes:
+      - name: graphql-route
+        paths:
+          - /graphql
+
+consumers:
+  - username: my-client
+    custom_id: client-001
+
+plugins:
+  - name: jwt
+    service: bff-service
+
+jwt_secrets:
+  - consumer: my-client
+    key: my-jwt-secret
+    algorithm: HS256
+    secret: my-very-secret-key
