@@ -1,0 +1,126 @@
+services:
+  db:
+    container_name: semantra-db
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_DB: semantra
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - ../db/pgdata:/var/lib/postgresql/data
+      - ../db/init:/docker-entrypoint-initdb.d
+    networks:
+      - semantra_net
+
+  redis:
+    container_name: semantra-redis
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - semantra_net
+
+  es:
+    container_name: semantra-es
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    networks:
+      - semantra_net
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  api:
+    container_name: semantra-api
+    build:
+      context: ../api
+      dockerfile: Dockerfile.dev
+    environment:
+      CONFIG_FILE_PATH: "/app/config.dev.json"
+      SERVER_PORT: "8081"
+    volumes:
+      - ../api:/app
+    ports:
+      - "8081:8081"
+    depends_on:
+      - db
+      - es
+      - redis
+    networks:
+      - semantra_net
+
+  sync:
+    container_name: semantra-sync
+    build:
+      context: ../sync
+      dockerfile: Dockerfile.dev
+    environment:
+      CONFIG_FILE_PATH: "/app/config.dev.json"
+    volumes:
+      - ../sync:/app
+    depends_on:
+      - db
+      - es
+      - redis
+    networks:
+      - semantra_net
+
+  bff:
+    container_name: bff
+    build:
+      context: ../bff
+      dockerfile: Dockerfile.dev
+    working_dir: /app
+    volumes:
+      - ../bff:/app
+    environment:
+      NODE_ENV: development
+      PORT: "4000"
+      NEXT_PUBLIC_API_URL: "http://api:8081"
+    ports:
+      - "4000:4000"
+    networks:
+      - semantra_net
+    depends_on:
+      - api
+
+  web:
+    container_name: semantra-web
+    build:
+      context: ../web
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ../web:/app
+    ports:
+      - "3001:3001"
+    depends_on:
+      - bff
+    networks:
+      - semantra_net
+
+  gate:
+    container_name: semantra-gate
+    image: kong:3.3
+    ports:
+      - "8000:8000" # Public API
+      - "8001:8001" # Admin API
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+    volumes:
+      - ../gate/kong.yml:/etc/kong/kong.yml
+    depends_on:
+      - bff
+    networks:
+      - semantra_net
+
+networks:
+  semantra_net:
+    driver: bridge
